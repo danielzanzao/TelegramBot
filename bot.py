@@ -1,4 +1,4 @@
-Z"""
+"""
 EnactusBOT - Main bot class and configuration
 """
 
@@ -16,7 +16,7 @@ class EnactusBot:
     def __init__(self, token):
         """Initialize the bot with the given token"""
         self.token = token
-        self.application = Application.builder().token(token).connection_pool_size(8).pool_timeout(20).read_timeout(20).write_timeout(20).build()
+        self.application = Application.builder().token(token).build()
         self.handlers = BotHandlers()
         self.reminder_scheduler = ReminderScheduler(self.application)
         self._setup_handlers()
