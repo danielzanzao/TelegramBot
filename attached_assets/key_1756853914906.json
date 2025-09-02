@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "enactuscefet-rj",
+  "private_key_id": "a34d6443d44509de4f23a83fb9a636e1f68a1df3",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDWeKUd9sqaLnpN\nb8Ldt6Tdmt2MEap9ZOA4D5SAJw86zK4vtQwLr93GR1f2eGS6CnyKJtoyRYxQGCea\nE5CMXVMk3OnO6hjrtmTVAT+q3/ngEKTvIASRCTgu/a1IiZLJMt5zAYBFDtKdee/A\nolRL5fRbWvmCu2fSzlI7zw694s3XvxdRsuMmYVMUYapbio+8BOfID4bQvPlQWj0n\nFFO7Ua1Co5Ab5Ae17wLICeRTqBr9HTlHvftpk0CAIWpB8ZR/0tC5o4zRjI+cLSpE\nHEzJrmC2KvbfTDyzEvhAID/3srlvVts7G7sKm6pVbPNnmB/3syIyGeItfGpZheET\nnuPLzQzhAgMBAAECggEAFl0ve5XG1+fBj1ZYe7H5BjYuRLs5W9jDZDkkry3TgdpC\nzhz7B/NzZOf+2UfB2h/6j1XgkhYsPNRd+cwxOh/HqhwCofXJejfTYR4/lzgCiH23\n0ysTqtOLKSRA9+PHm4UbSuMEzv6uEed7i4rpzx3IGqgchUg5OfNTgiLT2tNeC1F0\nEcW+zuRuy/WfyemWp7JkQjvn8gJLID5Xv54SDyfhlv0p67AXbRZuCZ+jtozV61t6\nZvlKYgXm73OI4+g984TB6EQSJ611ldO1dgz2HygA+DDr3v8t2xFuNC8SOWqY/QPm\nNIUAka5ofc4VNfsGWZjQqovh2RPPSHb9I7at/u6iKQKBgQDvvcKt4NJdMSlIO8kM\nCmlIXbULnmK3e7cybdXdxmz3c9gRazlPOGPxATXL6hAcGlcQ58d6HHQWHHwB2oTG\nGsGD/9X9zaPRc+J49QzEm3zQGdM3Txa5lW0rTR6A0BqupPsZIagv7DIBpGkR4MRx\ntWbBNeKIWWFSDXPfUfKNtXma6QKBgQDlBCmmkgLH9xFgr2SqiyrD8t8yZnJIcOUa\nivMcoN3+3X5JoNWu+5f6r1uKKwYKob8eld7h3M8waDoOixKzT3y6zDmWkq5ApRIj\n1GnUHiMZtpx+yIFpnV4g6ZzYgtvhxF1B+na6m2oWhHs0uCFKgbGoSEXtTW38bir6\nzgJWbfW3OQKBgQDnbScg8oYfr/VJ5WyOUv6O/OZn8N0agjK2W5C4JXPK6+kH55nK\n/4R6gdCMp8YlWsfxac0F87GcJqMOpwLEuc9UvQK1nm0lI9jbKrLIl9BEkqlyGsa1\nH6niwu9PKZSYQmqiN/tDR55+N1e2CmOX4KTwnjOvq5hmvNW+Hj0mzqg1AQKBgFct\nHXm1rO9XgjruqQAuV4odgo7Z5nji2KMg72gfaEHjKHZ4jb69MN4RMGRI+lTDu0+2\nNxB9EDVaB3ePwv+Uq2Mj6GwDy+b5rw0Kh3piOnRISgwM4Q5GBBW9N6JHNdIcAG/k\nGpvwGxMVPR0VVj7ZXbo0QMITLmHfweaU0tj5pIYpAoGAFOMMvBopK7XmojikZ3kU\nMg0CqXoQAILRsm2jMiU6LXc+SdAC84GNaxFSQ5PelHkyfmw3LsrquUTBrO5CNW0p\nPYvOD9tfk2D4lYwX37QmDOMkLkCxVnoS2vzxohBTYDZYMKQNJBIk7h3jU75deWbQ\nGK5f+t7YewwEFmLA/dQ5Le4=\n-----END PRIVATE KEY-----\n",
+  "client_email": "enactusbot@enactuscefet-rj.iam.gserviceaccount.com",
+  "client_id": "116365068792893148274",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/enactusbot%40enactuscefet-rj.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
