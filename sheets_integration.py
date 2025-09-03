@@ -8,12 +8,14 @@ import logging
 import os
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-
+from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from data_models import WorkHour
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,7 @@ class SheetsManager:
             private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
             client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
             client_id = os.environ.get('GOOGLE_CLIENT_ID')
-            spreadsheet_id = os.environ.get('GOOGLE_SHEETS_SPREADSHEET_ID')
+            spreadsheet_id = os.environ.get('ENACTUS_SPREADSHEET_ID')
             
             # Check if we have the required credentials
             required_vars = [project_id, private_key, client_email]
@@ -43,7 +45,15 @@ class SheetsManager:
                 logger.warning("Missing required Google credentials")
                 logger.info("Required: GOOGLE_PROJECT_ID, GOOGLE_PRIVATE_KEY, GOOGLE_CLIENT_EMAIL")
                 return
-            
+            if not project_id:
+                logger.warning("Project ID faltando")
+                
+            if not private_key:
+                logger.warning("Private KEY faltando")
+                
+            if not client_email:
+                logger.warning("Client Email faltando")
+                return
             if not spreadsheet_id:
                 logger.warning("Google Sheets Spreadsheet ID not found in environment variables")
                 return
