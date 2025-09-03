@@ -40,7 +40,7 @@ class SheetsManager:
             # Check if we have the required credentials
             required_vars = [project_id, private_key, client_email]
             if not all(required_vars):
-                logger.warning("Google credentials not found - using fragmented credential method")
+                logger.warning("Missing required Google credentials")
                 logger.info("Required: GOOGLE_PROJECT_ID, GOOGLE_PRIVATE_KEY, GOOGLE_CLIENT_EMAIL")
                 return
             
