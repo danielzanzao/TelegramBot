@@ -27,16 +27,52 @@ class SheetsManager:
         self._initialize_service()
     
     def _initialize_service(self):
-        """Initialize Google Sheets service with authentication"""
+        """Initialize Google Sheets service with authentication using fragmented credentials"""
         try:
-            # Check for service account credentials in environment
-            service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-            if not service_account_json:
-                logger.warning("Google Service Account JSON not found in environment variables")
+            # Get individual credential components from environment variables
+            project_id = os.environ.get('GOOGLE_PROJECT_ID')
+            private_key_id = os.environ.get('GOOGLE_PRIVATE_KEY_ID')
+            private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
+            client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
+            client_id = os.environ.get('GOOGLE_CLIENT_ID')
+            spreadsheet_id = os.environ.get('GOOGLE_SHEETS_SPREADSHEET_ID')
+            
+            # Check if we have the required credentials
+            required_vars = [project_id, private_key, client_email]
+            if not all(required_vars):
+                logger.warning("Google credentials not found - using fragmented credential method")
+                logger.info("Required: GOOGLE_PROJECT_ID, GOOGLE_PRIVATE_KEY, GOOGLE_CLIENT_EMAIL")
                 return
+            
+            if not spreadsheet_id:
+                logger.warning("Google Sheets Spreadsheet ID not found in environment variables")
+                return
+            
+            # Clean up the private key (remove quotes and fix formatting)
+            if private_key:
+                # Remove any escaped newlines and ensure proper formatting
+                private_key = private_key.replace('\\n', '\n')
+                private_key = private_key.strip()
                 
-            # Parse JSON credentials
-            creds_info = json.loads(service_account_json)
+                # Ensure proper header/footer
+                if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
+                    private_key = f"-----BEGIN PRIVATE KEY-----\n{private_key}\n-----END PRIVATE KEY-----"
+                elif not private_key.endswith('-----END PRIVATE KEY-----'):
+                    private_key = f"{private_key}\n-----END PRIVATE KEY-----"
+            
+            # Build credentials info from fragments
+            credentials_info = {
+                "type": "service_account",
+                "project_id": project_id,
+                "private_key_id": private_key_id or "default",
+                "private_key": private_key,
+                "client_email": client_email,
+                "client_id": client_id or "default",
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40') if client_email else 'default'}"
+            }
             
             # Set up credentials with required scopes
             scopes = [
@@ -44,25 +80,20 @@ class SheetsManager:
                 'https://www.googleapis.com/auth/drive'
             ]
             
+            # Create credentials from the service account info
             credentials = service_account.Credentials.from_service_account_info(
-                creds_info, scopes=scopes
+                credentials_info, scopes=scopes
             )
             
             # Build the service
             self.service = build('sheets', 'v4', credentials=credentials)
+            self.spreadsheet_id = spreadsheet_id
             
-            # Get spreadsheet ID from environment
-            self.spreadsheet_id = os.environ.get('ENACTUS_SPREADSHEET_ID')
-            if not self.spreadsheet_id:
-                logger.warning("ENACTUS_SPREADSHEET_ID not found in environment variables")
-                return
-                
-            logger.info("Google Sheets service initialized successfully")
+            logger.info("Google Sheets service initialized successfully with fragmented credentials")
             
-        except json.JSONDecodeError:
-            logger.error("Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON")
         except Exception as e:
             logger.error(f"Failed to initialize Google Sheets service: {str(e)}")
+            self.service = None
     
     def is_available(self) -> bool:
         """Check if Google Sheets integration is available"""
