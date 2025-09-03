@@ -44,11 +44,8 @@ class EnactusBot:
         try:
             logger.info("EnactusBOT is starting...")
             
-            # Run the bot with polling
-            self.application.run_polling(
-                allowed_updates=["message", "callback_query"],
-                drop_pending_updates=True
-            )
+            # Run the bot with polling - versão simplificada
+            self.application.run_polling()
             
         except Exception as e:
             logger.error(f"Error running bot: {str(e)}")
