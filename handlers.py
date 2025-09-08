@@ -205,6 +205,7 @@ Escolha uma opção abaixo:
         keyboard = [
             [InlineKeyboardButton("📊 Marcar HO", callback_data="mark_ho")],
             [InlineKeyboardButton("📁 Central Enactus", url=BotData.CENTRAL_ENACTUS_LINK)],
+            [InlineKeyboardButton("📈 Google Sheets", callback_data="sheets_menu")],
             [InlineKeyboardButton("🔔 Lembretes", callback_data="reminders")],
             [InlineKeyboardButton("❓ Ajuda", callback_data="help")]
         ]
@@ -1080,7 +1081,7 @@ O que deseja fazer?
 
 Acesse a planilha através do link abaixo:
 
-{spreadsheet_url}
+https://docs.google.com/spreadsheets/d/1jhKWvxQ4FYgpTsxjuU7itWC_PYT6oWk_im2gzfo0Gu0/
 
 A planilha contém todos os registros de HO sincronizados automaticamente.
             """

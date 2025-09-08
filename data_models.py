@@ -145,17 +145,16 @@ class BotData:
     
     # Lista de membros da Enactus - em ordem alfabética
     MEMBERS = [
-        "Ana Beatriz Rodrigues Soares",
-        "Beatriz Alves de Almeida",
+        "Ana Lívia Pinheiro dos Santos",
+        "Augusto Celso Batista Franklim",
         "Bernardo Ribeiro Leal",
         "Bruna Jobim Villar",
+        "Bruno Lage Correia",
         "Camyla Mabisis Araújo",
         "Daniel da Silva Mendes",
-        "Daniella Luisa Araujo Lobão",
         "Davi Chu de Oliveira",
         "Emily Thaise Sousa da Silva",
-        "Felipe Barboza Lopes",
-        "Gabriel Cordovil Cortez de Sousa Alves",
+        "Fernanda Luizi Garcia de Souza",
         "Gabriel de Almeida Henrique",
         "Gabriel Dias da Rocha",
         "Gabriela Maia Felipe da Silva",
@@ -166,13 +165,23 @@ class BotData:
         "Isabela dos Santos Mattoso",
         "Jhennifer de Oliveira Ribeiro",
         "João Pedro dos Santos Heleno",
+        "Jonathan André de Andrade Neves",
         "Julia Neves Costa Sa",
+        "Laís de Souza Trindade",
         "Laryssa de Andrade Alves",
-        "Maria Eduarda Oliveira Cunha",
+        "Lavinya Martins de Lima",
+        "Lucas de Freitas Gonçalves",
+        "Maria Eduarda Oliveira de Lima",
+        "Maria Heloísa Rangel da Silva",
+        "Maria Luiza Arruda Rezende",
+        "Maria Paula Ferreira Santos Carvalho",
         "Mariana Solon Ribeiro Sanches",
-        "Rony Souza",
+        "Pedro da Silva Ferreira",
+        "Peterson Guimarães do Nascimento",
+        "Rony da Silva Souza",
+        "Rosângela Vieira de Souza",
         "Thamyres Ranzeiro Campos",
-        "Thayna Araujo de Oliveira"
+        "Thayná Araujo de Oliveira"
     ]
     
     # Projetos da Enactus
@@ -186,7 +195,7 @@ class BotData:
     
     # Links (você deve atualizar com os links reais)
     CENTRAL_ENACTUS_LINK = "https://drive.google.com/drive/folders/1pFo4CP_LVCaI2hdQQyyKVr4IQfXTH204"
-    CLIMATE_SURVEY_LINK = "https://forms.google.com/seu-formulario-aqui"
+    CLIMATE_SURVEY_LINK = "https://forms.google.com/"
     
     # Status de aprovação possíveis
     APPROVAL_STATUS = ["Pendente", "Aprovado", "Reprovado"]
