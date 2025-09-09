@@ -368,15 +368,13 @@ class SheetsManager:
                         total_hours += hours
                         entries += 1
                         
-                        task_type = row[2]  # Tipo
-                        project_area = row[3]  # Projeto/Área
-                        
-                        if task_type == 'Projeto':
+                        task_type = row[2]
+                        project_area = row[3]
+                        if "Projeto" in task_type:
                             projects.add(project_area)
-                        elif task_type == 'Área':
+                        else:
                             areas.add(project_area)
-                            
-                    except (ValueError, IndexError):
+                    except Exception:
                         continue
             
             return {
@@ -385,17 +383,166 @@ class SheetsManager:
                 'projects': list(projects),
                 'areas': list(areas)
             }
-            
         except HttpError as e:
             logger.error(f"Failed to get member summary: {str(e)}")
             return {}
-    
-    def get_spreadsheet_url(self) -> Optional[str]:
-        """Get the URL of the current spreadsheet"""
+
+    # ============== NOVO: atualizar status por HO ID ==============
+    def update_work_hour_status(self, work_hour: WorkHour) -> bool:
+        """Atualiza colunas I..M (Status, HO ID, ID Telegram, Aprovado Por, Data Aprovação)
+           localizando a linha pela coluna J (HO ID)."""
+        if not self.is_available() or not work_hour.ho_id:
+            return False
+        try:
+            # lê a coluna J (HO ID) para achar a linha
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range='Registro HO!J2:J'
+            ).execute()
+            ids = [row[0] for row in result.get('values', []) if row]
+            if work_hour.ho_id not in ids:
+                logger.warning(f"HO ID {work_hour.ho_id} não encontrado no Sheets")
+                return False
+            row_index = ids.index(work_hour.ho_id) + 2  # +2 por cabeçalho
+
+            update_range = f"Registro HO!I{row_index}:M{row_index}"
+            approval_date = work_hour.approval_date.strftime('%d/%m/%Y %H:%M:%S') if work_hour.approval_date else ''
+            values = [[
+                work_hour.status,
+                work_hour.ho_id,
+                str(work_hour.telegram_user_id or ''),
+                work_hour.approved_by or '',
+                approval_date
+            ]]
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=update_range,
+                valueInputOption='RAW',
+                body={'values': values}
+            ).execute()
+            logger.info(f"Atualizado status da HO {work_hour.ho_id} na linha {row_index}")
+            return True
+        except HttpError as e:
+            logger.error(f"Failed to update work hour status: {e}")
+            return False
+        # ===================== LEITURA DA PLANILHA (A→M) =====================
+
+    def _read_all_rows(self):
+        """
+        Lê todas as linhas de 'Registro HO' (A2:M).
+        Retorna uma lista de listas (linhas), podendo ter células ausentes no final.
+        """
+        if not self.is_available():
+            return []
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range='Registro HO!A2:M'
+            ).execute()
+            return result.get('values', [])
+        except HttpError as e:
+            logger.error(f"Failed to read rows: {e}")
+            return []
+
+    def get_totals(self):
+        """
+        Retorna (total_ho, total_pendentes) a partir da planilha.
+        Coluna I (índice 8) = Status.
+        """
+        rows = self._read_all_rows()
+        total = 0
+        pendentes = 0
+        for r in rows:
+            # pula linhas completamente vazias
+            if not any(r):
+                continue
+            total += 1
+            status = (r[8].strip() if len(r) > 8 and r[8] else "").lower()
+            if status == "pendente":
+                pendentes += 1
+        return total, pendentes
+
+    def get_pending_summary_by_area(self, areas):
+        """
+        Retorna um dict: { area/projeto -> qtd_pendente } com base na planilha.
+        Coluna D (índice 3) = Projeto/Área
+        Coluna I (índice 8) = Status
+        """
+        rows = self._read_all_rows()
+        summary = {}
+        area_set = set(a.strip() for a in areas)
+        for r in rows:
+            if not any(r):
+                continue
+            status = (r[8].strip() if len(r) > 8 and r[8] else "")
+            pa = (r[3].strip() if len(r) > 3 and r[3] else "")
+            if status.lower() == "pendente" and pa in area_set:
+                summary[pa] = summary.get(pa, 0) + 1
+        return summary
+
+    def get_pending_work_hours_for_areas(self, areas):
+        """
+        Lê as HOs PENDENTES da planilha, restringindo a uma lista de áreas/projetos.
+        Mapeia cada linha para um objeto WorkHour (quando possível) para ser usado no fluxo de aprovação.
+        Colunas:
+          A Data/Hora registro
+          B Membro
+          C Tipo (Projeto/Área)
+          D Projeto/Área
+          E Descrição
+          F Data Trabalho
+          G Horas
+          H Modalidade
+          I Status
+          J HO ID
+          K ID Telegram
+          L Aprovado Por
+          M Data Aprovação
+        """
+        from data_models import WorkHour  # import local para evitar ciclos na importação
+        rows = self._read_all_rows()
+        result = []
+        area_set = set(a.strip() for a in areas)
+
+        for r in rows:
+            if not any(r):
+                continue
+            # segurança para tamanhos variáveis
+            get = lambda idx: (r[idx] if len(r) > idx else "")
+            status = (get(8).strip() or "")
+            project_area = (get(3).strip() or "")
+            if status.lower() != "pendente":
+                continue
+            if project_area not in area_set:
+                continue
+
+            try:
+                hours_val = float(str(get(6)).replace(",", ".") or "0")
+            except Exception:
+                hours_val = 0.0
+
+            wh = WorkHour(
+                member_name=get(1) or "",
+                task_type=get(2) or "",
+                project_area=project_area,
+                description=get(4) or "",
+                date=get(5) or "",
+                hours=hours_val,
+                modality=get(7) or "",
+                status=get(8) or "",
+                ho_id=get(9) or "",
+                telegram_user_id=int(get(10)) if str(get(10)).isdigit() else None,
+                approved_by=get(11) or "",
+                approval_date=None  # só preenche quando aprovar
+            )
+            result.append(wh)
+
+        return result
+    def get_spreadsheet_url(self):
         if not self.spreadsheet_id:
             return None
-        return f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
+        return f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}"
 
 
-# Global instance
+# singleton usado no projeto
 sheets_manager = SheetsManager()
