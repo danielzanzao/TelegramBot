@@ -208,7 +208,7 @@ class BotData:
         # (123456789, "João Silva", ["DAF", "GP"]),      # Gerente de DAF e GP
         # (987654321, "Maria Santos", ["Odoyá"]),        # Gerente do projeto Odoyá
         # (555666777, "Pedro Costa", ["MKT", "QLD"]),    # Gerente de MKT e QLD
-        (6229013307, "Daniel da Silva Mendes",["QLD","Maná"]),
+        (6229013307, "Daniel da Silva Mendes",(["QLD","Maná"])),
         # SUBSTITUA PELOS GERENTES REAIS:
         # Para descobrir o telegram_user_id, peça para o gerente enviar /start no bot
         # e verificar nos logs ou implementar um comando /get_my_id

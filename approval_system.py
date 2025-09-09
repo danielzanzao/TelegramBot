@@ -96,43 +96,21 @@ Clique no botão abaixo para iniciar o processo de aprovação.
             logger.error(
                 f"Failed to send approval notification to {manager.name}: {e}")
 
-    
-    async_mode = False  # só para referência; seu ApprovalSystem já é síncrono no core
+    def start_approval_session(self, user_id: int, manager: Manager):
+        """Start an approval session for a manager"""
+        pending_hours = storage.get_pending_work_hours_for_manager(manager)
 
-    def start_approval_session(self, telegram_user_id, manager):
-        """
-        Inicia a sessão de aprovação para um gerente.
-        1) Se o Google Sheets estiver disponível, carrega as HOs PENDENTES da planilha
-           filtradas pelas áreas/projetos do gerente.
-        2) Caso contrário, usa o storage em memória como fallback.
-        """
-        from sheets_integration import sheets_manager
-        from data_models import storage
-
-        if sheets_manager.is_available():
-            pending = sheets_manager.get_pending_work_hours_for_areas(manager.managed_areas)
-        else:
-            # fallback: memória
-            pending = [
-                wh for wh in storage.work_hours
-                if wh.status == "Pendente" and wh.project_area in manager.managed_areas
-            ]
-
-        if not pending:
-            # limpa qualquer sessão anterior
-            self._sessions.pop(telegram_user_id, None)
+        if not pending_hours:
             return None
 
-        self._sessions[telegram_user_id] = {
-            "manager": manager,
-            "items": pending,
-            "index": 0,
-            "approved": 0,
-            "rejected": 0,
-            "areas": list(manager.managed_areas),
+        self.approval_sessions[user_id] = {
+            'manager': manager,
+            'pending_hours': pending_hours,
+            'current_index': 0,
+            'approved_count': 0,
+            'rejected_count': 0,
+            'started_at': datetime.now()
         }
-        return self._sessions[telegram_user_id]
-
 
         return self.approval_sessions[user_id]
 
