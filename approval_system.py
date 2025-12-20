@@ -202,8 +202,8 @@ Clique no botão abaixo para iniciar o processo de aprovação.
 
         total = len(all_hours)
         pending = len([wh for wh in all_hours if wh.status == "Pendente"])
-        approved = len([wh for wh in all_hours if wh.status == "Aprovado"])
-        rejected = len([wh for wh in all_hours if wh.status == "Reprovado"])
+        approved = len([wh for wh in all_hours if wh.status == "Aprovada"])
+        rejected = len([wh for wh in all_hours if wh.status == "Reprovada"])
 
         return {
             'total': total,

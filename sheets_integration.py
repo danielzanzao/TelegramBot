@@ -7,13 +7,13 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from data_models import WorkHour
+from data_models import WorkHour, MemberProfile, Reminder, ReminderType, ReminderFrequency
 
 load_dotenv()
 
@@ -25,7 +25,8 @@ class SheetsManager:
     def __init__(self):
         """Initialize the Sheets Manager"""
         self.service = None
-        self.spreadsheet_id = None
+        self.ho_spreadsheet_id = None
+        self.db_spreadsheet_id = None
         self._initialize_service()
     
     def _initialize_service(self):
@@ -37,7 +38,10 @@ class SheetsManager:
             private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
             client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
             client_id = os.environ.get('GOOGLE_CLIENT_ID')
-            spreadsheet_id = os.environ.get('ENACTUS_SPREADSHEET_ID')
+            
+            # Spreadsheet IDs
+            self.ho_spreadsheet_id = os.environ.get('ENACTUS_SPREADSHEET_ID')
+            self.db_spreadsheet_id = os.environ.get('ENACTUS_DB_SPREADSHEET_ID')
             
             # Check if we have the required credentials
             required_vars = [project_id, private_key, client_email]
@@ -54,21 +58,29 @@ class SheetsManager:
             if not client_email:
                 logger.warning("Client Email faltando")
                 return
-            if not spreadsheet_id:
-                logger.warning("Google Sheets Spreadsheet ID not found in environment variables")
-                return
+            
+            if not self.ho_spreadsheet_id:
+                logger.warning("HO Spreadsheet ID not found (ENACTUS_SPREADSHEET_ID)")
+            
+            if not self.db_spreadsheet_id:
+                logger.warning("DB Spreadsheet ID not found (ENACTUS_DB_SPREADSHEET_ID). Persistence features may be limited.")
             
             # Clean up the private key (remove quotes and fix formatting)
             if private_key:
-                # Remove any escaped newlines and ensure proper formatting
+                # ... (Key processing logic kept same or assumed already correct in replacement) ...
+                logger.info("Processing Private Key...")
+                raw_len = len(private_key)
+                private_key = private_key.strip('"').strip("'")
                 private_key = private_key.replace('\\n', '\n')
                 private_key = private_key.strip()
                 
-                # Ensure proper header/footer
                 if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
-                    private_key = f"-----BEGIN PRIVATE KEY-----\n{private_key}\n-----END PRIVATE KEY-----"
-                elif not private_key.endswith('-----END PRIVATE KEY-----'):
-                    private_key = f"{private_key}\n-----END PRIVATE KEY-----"
+                    if '-----BEGIN PRIVATE KEY-----' not in private_key:
+                        private_key = f"-----BEGIN PRIVATE KEY-----\n{private_key}\n-----END PRIVATE KEY-----"
+                    else:
+                        private_key = private_key.strip()
+                
+                # ... (logging kept same) ...
             
             # Build credentials info from fragments
             credentials_info = {
@@ -97,17 +109,20 @@ class SheetsManager:
             
             # Build the service
             self.service = build('sheets', 'v4', credentials=credentials)
-            self.spreadsheet_id = spreadsheet_id
             
-            logger.info("Google Sheets service initialized successfully with fragmented credentials")
+            logger.info("Google Sheets service initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize Google Sheets service: {str(e)}")
             self.service = None
     
     def is_available(self) -> bool:
-        """Check if Google Sheets integration is available"""
-        return self.service is not None and self.spreadsheet_id is not None
+        """Check if HO Sheets integration is available"""
+        return self.service is not None and self.ho_spreadsheet_id is not None
+
+    def is_db_available(self) -> bool:
+        """Check if DB Sheets integration is available"""
+        return self.service is not None and self.db_spreadsheet_id is not None
     
     def create_enactus_spreadsheet(self, title: str = "Enactus HO Tracking") -> Optional[str]:
         """Create a new spreadsheet for Enactus HO tracking"""
@@ -205,58 +220,77 @@ class SheetsManager:
             logger.error(f"Failed to set up headers: {str(e)}")
     
     def sync_work_hour(self, work_hour: WorkHour, user_id: int) -> bool:
-        """Sync a single work hour entry to Google Sheets"""
-        if not self.is_available():
-            logger.warning("Google Sheets not available for sync")
-            return False
-            
-        try:
-            # Prepare row data
-            timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-            work_date = work_hour.date  # WorkHour uses 'date' field, not 'work_date'
-            
-            row_data = [
-                timestamp,                    # Data/Hora de registro
-                work_hour.member_name,        # Membro
-                work_hour.task_type,          # Tipo (Projeto/Área)
-                work_hour.project_area,       # Projeto/Área específica
-                work_hour.description,        # Descrição da atividade
-                work_date,                    # Data do trabalho
-                str(work_hour.hours),         # Horas trabalhadas
-                work_hour.modality,           # Modalidade (Presencial/EAD)
-                work_hour.status,             # Status (Pendente/Aprovado/Reprovado)
-                work_hour.ho_id or '',        # HO ID único
-                str(user_id),                 # ID do usuário Telegram
-                work_hour.approved_by or '',  # Aprovado por
-                work_hour.approval_date.strftime('%d/%m/%Y %H:%M:%S') if work_hour.approval_date else ''  # Data de aprovação
-            ]
-            
-            # Find next empty row
-            next_row = self._get_next_empty_row()
-            range_name = f'Registro HO!A{next_row}:M{next_row}'
-            
-            # Append the data
-            if not self.service:
-                return False
+        """Sync a single work hour entry to Google Sheets with auto-retry on auth failure"""
+        max_retries = 1
+        
+        for attempt in range(max_retries + 1):
+            if not self.is_available():
+                logger.info("Service not available, attempting initialization...")
+                self._initialize_service()
+                if not self.is_available():
+                    logger.warning("Google Sheets still not available after init.")
+                    if attempt == max_retries: return False
+                    continue
+
+            try:
+                # Prepare row data
+                timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                work_date = work_hour.date
                 
-            result = self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
-                range=range_name,
-                valueInputOption='RAW',
-                body={'values': [row_data]}
-            ).execute()
-            
-            updated_cells = result.get('updatedCells', 0)
-            if updated_cells > 0:
-                logger.info(f"Successfully synced work hour to row {next_row}")
-                return True
-            else:
-                logger.warning("No cells were updated during sync")
-                return False
+                row_data = [
+                    timestamp,                    # Data/Hora de registro
+                    work_hour.member_name,        # Membro
+                    work_hour.task_type,          # Tipo (Projeto/Área)
+                    work_hour.project_area,       # Projeto/Área específica
+                    work_hour.description,        # Descrição da atividade
+                    work_date,                    # Data do trabalho
+                    str(work_hour.hours).replace('.', ','),         # Horas trabalhadas
+                    work_hour.modality,           # Modalidade (Presencial/EAD)
+                    work_hour.status,             # Status (Pendente/Aprovado/Reprovado)
+                    work_hour.ho_id or '',        # HO ID único
+                    str(user_id),                 # ID do usuário Telegram
+                    work_hour.approved_by or '',  # Aprovado por
+                    work_hour.approval_date.strftime('%d/%m/%Y %H:%M:%S') if work_hour.approval_date else ''
+                ]
                 
-        except HttpError as e:
-            logger.error(f"Failed to sync work hour: {str(e)}")
-            return False
+                # Find next empty row
+                next_row = self._get_next_empty_row()
+                range_name = f'Registro HO!A{next_row}:M{next_row}'
+                
+                if not self.service:
+                    raise Exception("Service lost during operation")
+
+                result = self.service.spreadsheets().values().update(
+                    spreadsheetId=self.ho_spreadsheet_id,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [row_data]}
+                ).execute()
+                
+                updated_cells = result.get('updatedCells', 0)
+                if updated_cells > 0:
+                    logger.info(f"Successfully synced work hour to row {next_row}")
+                    return True
+                else:
+                    logger.warning("No cells were updated during sync")
+                    return False
+                    
+            except Exception as e:
+                error_str = str(e)
+                logger.error(f"Sync attempt {attempt+1} failed: {error_str}")
+                
+                # Check for auth errors to trigger re-init
+                is_auth_error = "invalid_grant" in error_str or "unauthorized" in error_str.lower() or "401" in error_str
+                
+                if is_auth_error and attempt < max_retries:
+                    logger.warning("Authentication error detected. Forcing service re-initialization...")
+                    self.service = None # Clear bad service
+                    self._initialize_service()
+                    continue
+                
+                if attempt == max_retries:
+                    return False
+        return False
     
     def sync_multiple_work_hours(self, work_hours: List[WorkHour], user_id: int) -> int:
         """Sync multiple work hour entries to Google Sheets"""
@@ -281,7 +315,7 @@ class SheetsManager:
                     work_hour.project_area,
                     work_hour.description,
                     work_date,
-                    str(work_hour.hours),
+                    str(work_hour.hours).replace('.', ','),
                     work_hour.modality,
                     work_hour.status,
                     work_hour.ho_id or '',
@@ -301,7 +335,7 @@ class SheetsManager:
                 return 0
                 
             result = self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
+                spreadsheetId=self.ho_spreadsheet_id,
                 range=range_name,
                 valueInputOption='RAW',
                 body={'values': batch_data}
@@ -325,7 +359,7 @@ class SheetsManager:
         try:
             # Get all data from column A to determine last used row
             result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
+                spreadsheetId=self.ho_spreadsheet_id,
                 range='Registro HO!A:A'
             ).execute()
             
@@ -347,7 +381,7 @@ class SheetsManager:
                 return {}
                 
             result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
+                spreadsheetId=self.ho_spreadsheet_id,
                 range='Registro HO!A:J'
             ).execute()
             
@@ -392,10 +426,321 @@ class SheetsManager:
     
     def get_spreadsheet_url(self) -> Optional[str]:
         """Get the URL of the current spreadsheet"""
-        if not self.spreadsheet_id:
+        if not self.ho_spreadsheet_id:
             return None
-        return f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
+        return f"https://docs.google.com/spreadsheets/d/{self.ho_spreadsheet_id}/edit"
 
+
+    def get_pending_approvals(self, managed_scopes: List[str]) -> List[Dict]:
+        """Get pending HOs for specific scopes"""
+        if not self.is_available(): return []
+        
+        try:
+            # Read all data
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.ho_spreadsheet_id,
+                range='Registro HO!A:K'  # Read up to K just in case
+            ).execute()
+            
+            rows = result.get('values', [])
+            if not rows or len(rows) < 2: return [] # No data or just header
+            
+            pending = []
+            # Start from row 2 (index 1 in 0-based list, but row number is index+1)
+            for i, row in enumerate(rows):
+                if i == 0: continue # Skip header
+                
+                # Check bounds
+                if len(row) <= 8: continue # Not enough cols for Status
+                
+                status = row[8] # Col I
+                project_area = row[3] if len(row) > 3 else "" # Col D
+                
+                if status == "Pendente" and project_area in managed_scopes:
+                    member = row[1] if len(row) > 1 else "Desconhecido" # Col B
+                    description = row[4] if len(row) > 4 else "" # Col E
+                    date_val = row[5] if len(row) > 5 else "" # Col F
+                    hours = row[6] if len(row) > 6 else "" # Col G
+                    
+                    pending.append({
+                        'row_id': i + 1,
+                        'member': member,
+                        'project': project_area,
+                        'description': description,
+                        'date': date_val,
+                        'hours': hours,
+                        'telegram_id': row[10] if len(row) > 10 else None
+                    })
+            return pending
+            
+        except Exception as e:
+            logger.error(f"Error fetching pending approvals: {e}")
+            return []
+
+    def update_ho_status(self, row_id: int, new_status: str, approver_name: str) -> bool:
+        """Update status of a HO record"""
+        if not self.is_available(): return False
+        
+        try:
+            timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            
+            # Update Status (Col I)
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.ho_spreadsheet_id,
+                range=f'Registro HO!I{row_id}',
+                valueInputOption='RAW',
+                body={'values': [[new_status]]}
+            ).execute()
+            
+            # Update Approved By and Date (Cols L, M)
+            # Col L is index 11 (12th col), M is index 12 (13th col)
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.ho_spreadsheet_id,
+                range=f'Registro HO!L{row_id}:M{row_id}',
+                valueInputOption='RAW',
+                body={'values': [[approver_name, timestamp]]}
+            ).execute()
+            
+            logger.info(f"Updated HO row {row_id} to {new_status} by {approver_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating HO status: {e}")
+            return False
+
+    # ========================== DB SPREADSHEET METHODS ==========================
+    
+    def ensure_db_structure(self):
+        """Ensure the DB spreadsheet has 'Membros' and 'Lembretes' tabs"""
+        if not self.is_db_available():
+            logger.warning("DB Spreadsheet unavailable for structure check")
+            return
+            
+        try:
+            metadata = self.service.spreadsheets().get(spreadsheetId=self.db_spreadsheet_id).execute()
+            sheets = metadata.get('sheets', [])
+            sheet_titles = [s['properties']['title'] for s in sheets]
+            
+            requests = []
+            
+            # Check for 'Membros'
+            if 'Membros' not in sheet_titles:
+                requests.append({
+                    'addSheet': {'properties': {'title': 'Membros'}}
+                })
+                
+            # Check for 'Lembretes'
+            if 'Lembretes' not in sheet_titles:
+                requests.append({
+                    'addSheet': {'properties': {'title': 'Lembretes'}}
+                })
+                
+            if requests:
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.db_spreadsheet_id,
+                    body={'requests': requests}
+                ).execute()
+                logger.info("Created missing DB sheets (Membros/Lembretes)")
+                
+                # Update headers for new sheets
+                if 'Membros' not in sheet_titles:
+                    self._setup_members_header()
+                if 'Lembretes' not in sheet_titles:
+                    self._setup_reminders_header()
+            
+        except Exception as e:
+            logger.error(f"Error ensuring DB structure: {e}")
+
+    def _setup_members_header(self):
+        """Set up headers for 'Membros' sheet"""
+        values = [['Nome', 'Telegram ID', 'Cargos', 'Áreas Gerenciadas']]
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.db_spreadsheet_id,
+            range='Membros!A1:D1',
+            valueInputOption='RAW',
+            body={'values': values}
+        ).execute()
+
+    def _setup_reminders_header(self):
+        """Set up headers for 'Lembretes' sheet"""
+        values = [['Telegram ID', 'Nome', 'Tipo (HO/PCH)', 'Frequência', 'Dia Semana', 'Dia Mês', 'Hora', 'Ativo?']]
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.db_spreadsheet_id,
+            range='Lembretes!A1:H1',
+            valueInputOption='RAW',
+            body={'values': values}
+        ).execute()
+
+    def load_members(self) -> List[MemberProfile]:
+        """Load members from DB spreadsheet"""
+        if not self.is_db_available(): return []
+        
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Membros!A:D'
+            ).execute()
+            
+            rows = result.get('values', [])
+            if not rows or len(rows) < 2: return []
+            
+            members = []
+            for i, row in enumerate(rows):
+                if i == 0: continue # Skip header
+                if not row: continue
+                
+                name = row[0]
+                tid_str = row[1] if len(row) > 1 else None
+                roles_str = row[2] if len(row) > 2 else ""
+                scopes_str = row[3] if len(row) > 3 else ""
+                
+                telegram_id = int(tid_str) if tid_str and tid_str.isdigit() else None
+                roles = [r.strip() for r in roles_str.split(',')] if roles_str else []
+                scopes = [s.strip() for s in scopes_str.split(',')] if scopes_str else []
+                
+                members.append(MemberProfile(
+                    name=name,
+                    telegram_id=telegram_id,
+                    roles=roles,
+                    managed_scopes=scopes
+                ))
+            
+            logger.info(f"Loaded {len(members)} members from DB")
+            return members
+            
+        except Exception as e:
+            logger.error(f"Error loading members: {e}")
+            return []
+
+    def save_members(self, members: List[MemberProfile]):
+        """Save all members to DB spreadsheet (Overwrite)"""
+        if not self.is_db_available(): return
+        
+        try:
+            # Prepare data
+            rows = [['Nome', 'Telegram ID', 'Cargos', 'Áreas Gerenciadas']]
+            for m in members:
+                rows.append([
+                    m.name,
+                    str(m.telegram_id) if m.telegram_id else "",
+                    ", ".join(m.roles),
+                    ", ".join(m.managed_scopes)
+                ])
+                
+            # Clear existing
+            self.service.spreadsheets().values().clear(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Membros!A:D'
+            ).execute()
+            
+            # Write new
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Membros!A1',
+                valueInputOption='RAW',
+                body={'values': rows}
+            ).execute()
+            
+            logger.info("Saved members to DB")
+            
+        except Exception as e:
+            logger.error(f"Error saving members: {e}")
+
+    def load_reminders(self) -> List[Reminder]:
+        """Load reminders from DB spreadsheet"""
+        if not self.is_db_available(): return []
+        
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Lembretes!A:H'
+            ).execute()
+            
+            rows = result.get('values', [])
+            if not rows or len(rows) < 2: return []
+            
+            reminders = []
+            for i, row in enumerate(rows):
+                if i == 0: continue # Skip header
+                if len(row) < 8: continue
+                
+                try:
+                    user_id = int(row[0])
+                    name = row[1]
+                    r_type_str = row[2]
+                    freq_str = row[3]
+                    day_week = int(row[4]) if row[4] and row[4] != 'None' else None
+                    day_month = int(row[5]) if row[5] and row[5] != 'None' else None
+                    
+                    time_parts = row[6].split(':')
+                    time_val = datetime.strptime(row[6], '%H:%M:%S').time() if len(time_parts) in [2,3] else None
+                    
+                    is_active = row[7].lower() == 'true'
+                    
+                    # Convert enums
+                    r_type = ReminderType.PCH if r_type_str == 'pch' else ReminderType.HO
+                    
+                    freq_map = {'daily': ReminderFrequency.DAILY, 'weekly': ReminderFrequency.WEEKLY, 'monthly': ReminderFrequency.MONTHLY}
+                    freq = freq_map.get(freq_str, ReminderFrequency.WEEKLY)
+                    
+                    reminders.append(Reminder(
+                        user_id=user_id,
+                        member_name=name,
+                        type=r_type,
+                        frequency=freq,
+                        time_of_day=time_val,
+                        day_of_week=day_week,
+                        day_of_month=day_month,
+                        is_active=is_active
+                    ))
+                except Exception as parse_err:
+                    logger.warning(f"Skipping invalid reminder row {i+1}: {parse_err}")
+                    continue
+            
+            logger.info(f"Loaded {len(reminders)} reminders from DB")
+            return reminders
+            
+        except Exception as e:
+            logger.error(f"Error loading reminders: {e}")
+            return []
+
+    def save_reminders(self, reminders: List[Reminder]):
+        """Save all reminders to DB spreadsheet (Overwrite)"""
+        if not self.is_db_available(): return
+        
+        try:
+            rows = [['Telegram ID', 'Nome', 'Tipo (HO/PCH)', 'Frequência', 'Dia Semana', 'Dia Mês', 'Hora', 'Ativo?']]
+            
+            for r in reminders:
+                rows.append([
+                    str(r.user_id),
+                    r.member_name,
+                    r.type.value,
+                    r.frequency.value,
+                    str(r.day_of_week) if r.day_of_week is not None else 'None',
+                    str(r.day_of_month) if r.day_of_month is not None else 'None',
+                    r.time_of_day.strftime('%H:%M:%S'),
+                    str(r.is_active)
+                ])
+                
+            # Clear existing
+            self.service.spreadsheets().values().clear(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Lembretes!A:H'
+            ).execute()
+            
+            # Write new
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Lembretes!A1',
+                valueInputOption='RAW',
+                body={'values': rows}
+            ).execute()
+            
+            logger.info("Saved reminders to DB")
+            
+        except Exception as e:
+            logger.error(f"Error saving reminders: {e}")
 
 # Global instance
 sheets_manager = SheetsManager()

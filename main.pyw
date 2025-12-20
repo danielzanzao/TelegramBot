@@ -7,10 +7,11 @@ Main entry point for the application
 import os
 import logging
 from dotenv import load_dotenv
-from bot import EnactusBot
 
-# Load environment variables
+# Load environment variables immediately, before importing other modules
 load_dotenv()
+
+from bot import EnactusBot
 
 # Configure logging
 logging.basicConfig(
