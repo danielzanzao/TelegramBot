@@ -553,10 +553,10 @@ class SheetsManager:
 
     def _setup_members_header(self):
         """Set up headers for 'Membros' sheet"""
-        values = [['Nome', 'Telegram ID', 'Cargos', 'Áreas Gerenciadas']]
+        values = [['Nome', 'Telegram ID', 'Cargos', 'Áreas Gerenciadas', 'Email', 'Matrícula']]
         self.service.spreadsheets().values().update(
             spreadsheetId=self.db_spreadsheet_id,
-            range='Membros!A1:D1',
+            range='Membros!A1:F1',
             valueInputOption='RAW',
             body={'values': values}
         ).execute()
@@ -578,7 +578,7 @@ class SheetsManager:
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.db_spreadsheet_id,
-                range='Membros!A:D'
+                range='Membros!A:F'
             ).execute()
             
             rows = result.get('values', [])
@@ -597,12 +597,16 @@ class SheetsManager:
                 telegram_id = int(tid_str) if tid_str and tid_str.isdigit() else None
                 roles = [r.strip() for r in roles_str.split(',')] if roles_str else []
                 scopes = [s.strip() for s in scopes_str.split(',')] if scopes_str else []
+                email = row[4] if len(row) > 4 else None
+                matricula = row[5] if len(row) > 5 else None
                 
                 members.append(MemberProfile(
                     name=name,
                     telegram_id=telegram_id,
                     roles=roles,
-                    managed_scopes=scopes
+                    managed_scopes=scopes,
+                    email=email,
+                    matricula=matricula
                 ))
             
             logger.info(f"Loaded {len(members)} members from DB")
@@ -613,24 +617,26 @@ class SheetsManager:
             return []
 
     def save_members(self, members: List[MemberProfile]):
-        """Save all members to DB spreadsheet (Overwrite)"""
+        """Save entire member list to DB overwriting"""
         if not self.is_db_available(): return
         
         try:
             # Prepare data
-            rows = [['Nome', 'Telegram ID', 'Cargos', 'Áreas Gerenciadas']]
+            rows = [['Nome', 'Telegram ID', 'Cargos', 'Áreas Gerenciadas', 'Email', 'Matrícula']]
             for m in members:
                 rows.append([
                     m.name,
                     str(m.telegram_id) if m.telegram_id else "",
                     ", ".join(m.roles),
-                    ", ".join(m.managed_scopes)
+                    ", ".join(m.managed_scopes),
+                    m.email if m.email else "",
+                    m.matricula if m.matricula else ""
                 ])
                 
             # Clear existing
             self.service.spreadsheets().values().clear(
                 spreadsheetId=self.db_spreadsheet_id,
-                range='Membros!A:D'
+                range='Membros!A:F'
             ).execute()
             
             # Write new
@@ -741,6 +747,101 @@ class SheetsManager:
             
         except Exception as e:
             logger.error(f"Error saving reminders: {e}")
+
+    def log_member_movement(self, member_name: str, telegram_id: int, role_change: str, movement_type: str = "Cadastro") -> bool:
+        """Log a member movement (role change, registration) to Historico sheet"""
+        if not self.is_db_available(): return False
+        
+        try:
+            timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            
+            # Check if Historico sheet exists - we assume ensure_db_structure was called
+            # but strictly speaking we should just append.
+            
+            row_data = [
+                timestamp,
+                member_name,
+                str(telegram_id),
+                movement_type,
+                role_change
+            ]
+            
+            self.service.spreadsheets().values().append(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Historico!A:E',
+                valueInputOption='RAW',
+                insertDataOption='INSERT_ROWS',
+                body={'values': [row_data]}
+            ).execute()
+            
+            logger.info(f"Logged movement for {member_name}: {movement_type}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error logging member movement: {e}")
+            return False
+
+    def update_member_registration(self, member_name: str, telegram_id: int, roles: List[str], managed_scopes: List[str] = None, email: str = None, matricula: str = None) -> bool:
+        """Update member's registration info (ID, Roles, Managed Scopes, Email, Matricula) in Membros sheet"""
+        if not self.is_db_available(): return False
+        
+        try:
+            # First, find the row for this member
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.db_spreadsheet_id,
+                range='Membros!A:A'
+            ).execute()
+            
+            rows = result.get('values', [])
+            row_index = -1
+            
+            # Find matching name
+            for i, row in enumerate(rows):
+                if row and row[0] == member_name:
+                    row_index = i + 1
+                    break
+            
+            if row_index == -1:
+                # Member not found in list, should we add? 
+                # For now, let's append if not found, though usually we expect pre-populated list
+                row_index = len(rows) + 1
+                logger.info(f"Member {member_name} not found in DB, appending new row {row_index}")
+                
+                # Write Name
+                self.service.spreadsheets().values().update(
+                    spreadsheetId=self.db_spreadsheet_id,
+                    range=f'Membros!A{row_index}',
+                    valueInputOption='RAW',
+                    body={'values': [[member_name]]}
+                ).execute()
+
+            # Prepare Update Data (Cols B, C, D, E, F)
+            # B: Telegram ID
+            # C: Roles
+            # D: Managed Scopes
+            # E: Email
+            # F: Matricula
+            
+            roles_str = ", ".join(roles)
+            scopes_str = ", ".join(managed_scopes) if managed_scopes else ""
+            email_str = email if email else ""
+            matricula_str = matricula if matricula else ""
+            
+            update_values = [[str(telegram_id), roles_str, scopes_str, email_str, matricula_str]]
+            
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.db_spreadsheet_id,
+                range=f'Membros!B{row_index}:F{row_index}',
+                valueInputOption='RAW',
+                body={'values': update_values}
+            ).execute()
+            
+            logger.info(f"Updated registration for {member_name} at row {row_index}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating member registration: {e}")
+            return False
 
 # Global instance
 sheets_manager = SheetsManager()

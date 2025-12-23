@@ -64,9 +64,10 @@ class EnactusBot:
         """Setup all bot handlers"""
         # Command handlers
         self.application.add_handler(CommandHandler("start", self.handlers.start_command))
+        self.application.add_handler(CommandHandler("cadastro", self.handlers.cadastro_command))
         self.application.add_handler(CommandHandler("help", self.handlers.help_command))
         self.application.add_handler(CommandHandler("get_my_id", self.handlers.get_my_id_command))
-        self.application.add_handler(CommandHandler("refresh_db", self.handlers.refresh_db_command))
+        self.application.add_handler(CommandHandler("refresh", self.handlers.refresh_command))
         
         # Callback query handlers for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.handlers.handle_callback))

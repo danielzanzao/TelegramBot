@@ -1,0 +1,34 @@
+    async def _show_main_menu_message(self, update):
+        """Show main menu after an action"""
+        user_id = update.effective_user.id
+        user = update.effective_user
+        
+        # Check permissions
+        is_gp_role = BotData.is_user_in_role(user_id, "GP")
+        managed_scopes = BotData.get_managed_scopes(user_id)
+        is_gp_manager = "GP" in managed_scopes
+        
+        is_gp = is_gp_role or is_gp_manager
+        is_manager = len(managed_scopes) > 0
+        
+        keyboard = [
+            [KeyboardButton("📊 Marcar HO"), KeyboardButton("📁 Central Enactus")],
+        ]
+        
+        if is_manager:
+             keyboard.append([KeyboardButton("✅ Validar HOs")])
+
+        if is_gp:
+            gp_buttons = [KeyboardButton("📈 Google Sheets"), KeyboardButton("🔔 Lembretes")]
+            keyboard.append(gp_buttons)
+            keyboard.append([KeyboardButton("🔄 Remanejar Membro")])
+            keyboard.append([KeyboardButton("❓ Ajuda")])
+        else:
+             keyboard.append([KeyboardButton("🔔 Lembretes"), KeyboardButton("❓ Ajuda")])
+             
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            "O que deseja fazer agora?",
+            reply_markup=reply_markup
+        )

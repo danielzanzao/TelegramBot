@@ -184,6 +184,8 @@ class MemberProfile:
     telegram_id: Optional[int] = None
     roles: List[str] = field(default_factory=list)
     managed_scopes: List[str] = field(default_factory=list)
+    email: Optional[str] = None
+    matricula: Optional[str] = None
 
 class BotData:
     """Static data for the bot"""
@@ -252,6 +254,33 @@ class BotData:
         cls.MEMBERS = cls.get_member_names()
 
     @classmethod
+    def update_member_locally(cls, name: str, telegram_id: int, roles: List[str], managed_scopes: List[str] = None, email: str = None, matricula: str = None):
+        """Update a single member in the local list"""
+        # Find and update existing or add new
+        found = False
+        for member in cls.MEMBERS_DB:
+            if member.name == name:
+                member.telegram_id = telegram_id
+                member.roles = roles
+                if managed_scopes is not None: member.managed_scopes = managed_scopes
+                if email: member.email = email
+                if matricula: member.matricula = matricula
+                found = True
+                break
+        
+        if not found:
+            cls.MEMBERS_DB.append(MemberProfile(
+                name=name, 
+                telegram_id=telegram_id, 
+                roles=roles, 
+                managed_scopes=managed_scopes,
+                email=email,
+                matricula=matricula
+            ))
+            
+        cls.MEMBERS = cls.get_member_names()
+
+    @classmethod
     def get_member_names(cls) -> List[str]:
         """Returns list of member names for backward compatibility"""
         return [m.name for m in cls.MEMBERS_DB]
@@ -297,7 +326,7 @@ class BotData:
     PROJECTS = ["Odoyá", "Maná"]
     
     # Áreas da Enactus
-    AREAS = ["DAF", "GP", "MKT", "QLD", "PSD"]
+    AREAS = ["DAF", "GP", "MKT", "QLD"]
     
     # Modalidades de trabalho
     MODALITIES = ["Presencial", "EAD"]
